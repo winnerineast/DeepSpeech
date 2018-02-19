@@ -31,20 +31,26 @@ pyenv virtualenv ${pyver} ${PYENV_NAME}
 source ${PYENV_ROOT}/versions/${pyver}/envs/${PYENV_NAME}/bin/activate
 
 if [ "${tf}" = "mozilla" ]; then
-    pip install --upgrade ${TENSORFLOW_WHEEL}
-    grep -v "tensorflow" ${HOME}/DeepSpeech/ds/requirements.txt | pip install --upgrade -r /dev/stdin
+    pip install --upgrade ${TENSORFLOW_WHEEL} | cat
+    grep -v "tensorflow" ${HOME}/DeepSpeech/ds/requirements.txt | pip install --upgrade -r /dev/stdin | cat
 fi;
 
 if [ "${tf}" = "upstream" ]; then
-    pip install --upgrade -r ${HOME}/DeepSpeech/ds/requirements.txt
+    pip install --upgrade -r ${HOME}/DeepSpeech/ds/requirements.txt | cat
 fi;
 
 if [ "${ds}" = "deepspeech" ]; then
-    pip install "${DEEPSPEECH_PYTHON_PACKAGE}"
+    pip install "${DEEPSPEECH_PYTHON_PACKAGE}" | cat
     python -c "import tensorflow; from deepspeech.utils import audioToInputVector"
-fi;
 
-download_ctc_kenlm "/tmp/ds"
+    # Since this build depends on the completion of the whole deepspeech package
+    # and we might get into funny situation with --config=monolithic, then let's
+    # be extra-cautious and leverage our dependency against the build to also
+    # test with libctc_decoder_with_kenlm.so that is packaged for release
+    download_native_client_files "/tmp/ds"
+else
+    download_ctc_kenlm "/tmp/ds"
+fi;
 
 pushd ${HOME}/DeepSpeech/ds/
     time ./bin/run-tc-ldc93s1.sh
@@ -54,3 +60,11 @@ deactivate
 pyenv uninstall --force ${PYENV_NAME}
 
 cp /tmp/train/output_graph.pb ${TASKCLUSTER_ARTIFACTS}
+
+if [ ! -z "${CONVERT_GRAPHDEF_MEMMAPPED}" ]; then
+  convert_graphdef=$(basename "${CONVERT_GRAPHDEF_MEMMAPPED}")
+  wget -P "/tmp/" "${CONVERT_GRAPHDEF_MEMMAPPED}" && chmod +x "/tmp/${convert_graphdef}"
+
+  /tmp/${convert_graphdef} --in_graph=/tmp/train/output_graph.pb --out_graph=/tmp/train/output_graph.pbmm
+  cp /tmp/train/output_graph.pbmm ${TASKCLUSTER_ARTIFACTS}
+fi;

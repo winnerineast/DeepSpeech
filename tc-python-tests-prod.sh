@@ -31,6 +31,9 @@ mkdir -p ${PYENV_ROOT} || true
 model_source=${DEEPSPEECH_PROD_MODEL}
 model_name=$(basename "${model_source}")
 
+model_source_mmap=${DEEPSPEECH_PROD_MODEL_MMAP}
+model_name_mmap=$(basename "${model_source_mmap}")
+
 download_data
 
 install_pyenv "${PYENV_ROOT}"
@@ -42,12 +45,11 @@ pyenv virtualenv ${pyver} ${PYENV_NAME}
 source ${PYENV_ROOT}/versions/${pyver}/envs/${PYENV_NAME}/bin/activate
 
 platform=$(python -c 'import sys; import platform; plat = platform.system().lower(); plat = "manylinux1" if plat == "linux" else plat; sys.stdout.write("%s_%s" % (plat, platform.machine()));')
-deepspeech_pkg="deepspeech-0.1.0-cp${pyver_pkg}-cp${pyver_pkg}${py_unicode_type}-${platform}.whl"
+deepspeech_pkg="deepspeech-0.1.1-cp${pyver_pkg}-cp${pyver_pkg}${py_unicode_type}-${platform}.whl"
 
-pip install --upgrade ${DEEPSPEECH_ARTIFACTS_ROOT}/${deepspeech_pkg}
+pip install --upgrade ${DEEPSPEECH_ARTIFACTS_ROOT}/${deepspeech_pkg} | cat
 
-phrase_pbmodel_withlm=$(deepspeech ${TASKCLUSTER_TMP_DIR}/${model_name} ${TASKCLUSTER_TMP_DIR}/LDC93S1.wav ${TASKCLUSTER_TMP_DIR}/alphabet.txt ${TASKCLUSTER_TMP_DIR}/lm.binary ${TASKCLUSTER_TMP_DIR}/trie)
-assert_correct_ldc93s1_prodmodel "${phrase_pbmodel_withlm}"
+run_prod_inference_tests
 
 deactivate
 pyenv uninstall --force ${PYENV_NAME}
